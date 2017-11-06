@@ -1,0 +1,52 @@
+MODULE main
+
+VAR
+    button: {down, up};
+    phase: {haltDown, movingUp, haltUp, movingDown};
+
+IVAR
+    action: {pressDown, pressUp, none};
+
+ASSIGN
+    init(button) := up;
+    init(phase) := haltUp;
+
+    next(button) := case action = pressDown: down;
+                         action = pressUp: up;
+                         TRUE: button;
+                    esac;
+
+    next(phase) := case phase = haltUp & action = pressDown: movingDown;
+                        phase = haltDown & action = pressUp: movingUp;
+
+                        phase = movingDown & action = none: haltDown;
+                        phase = movingUp & action = none: haltUp;
+
+                        phase = movingDown & action = pressUp: movingUp;
+                        phase = movingUp & action = pressDown: movingDown;
+
+                        TRUE: phase;
+                    esac;
+
+TRANS
+    action = pressDown -> button = up
+TRANS
+    action = pressUp -> button = down
+
+-- R11bis
+LTLSPEC
+    G (button = down & next(button) = down -> F phase = haltDown)
+-- R12bis
+LTLSPEC
+    G (button = up & next(button) = up -> F phase = haltUp)
+-- R21
+LTLSPEC
+    G (button = down -> phase != movingUp & phase != haltUp)
+-- R22
+LTLSPEC
+    G (button = up -> phase != movingDown & phase != haltDown)
+
+LTLSPEC
+    G (phase = movingUp -> button = up)
+LTLSPEC
+    G (phase = movingDown -> button = down)
