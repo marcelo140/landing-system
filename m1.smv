@@ -4,34 +4,21 @@ VAR
     button: {down, up};
     phase: {haltDown, movingUp, haltUp, movingDown};
 
-IVAR
-    action: {pressDown, pressUp, none};
-
 ASSIGN
     init(button) := up;
     init(phase) := haltUp;
 
-    next(button) := case action = pressDown: down;
-                         action = pressUp: up;
-                         TRUE: button;
-                    esac;
+    next(phase) := case phase = haltUp & next(button) = down: movingDown;
+                        phase = haltDown & next(button) = up: movingUp;
 
-    next(phase) := case phase = haltUp & action = pressDown: movingDown;
-                        phase = haltDown & action = pressUp: movingUp;
+                        phase = movingDown & next(button) = down: haltDown;
+                        phase = movingUp & next(button) = up: haltUp;
 
-                        phase = movingDown & action = none: haltDown;
-                        phase = movingUp & action = none: haltUp;
-
-                        phase = movingDown & action = pressUp: movingUp;
-                        phase = movingUp & action = pressDown: movingDown;
+                        phase = movingDown & next(button) = up: movingUp;
+                        phase = movingUp & next(button) = down: movingDown;
 
                         TRUE: phase;
                     esac;
-
-TRANS
-    action = pressDown -> button = up
-TRANS
-    action = pressUp -> button = down
 
 -- R11bis
 LTLSPEC
@@ -45,7 +32,6 @@ LTLSPEC
 -- R22
 LTLSPEC
     G (button = up -> phase != movingDown & phase != haltDown)
-
 LTLSPEC
     G (phase = movingUp -> button = up)
 LTLSPEC
