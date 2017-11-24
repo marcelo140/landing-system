@@ -2,72 +2,76 @@ MODULE main
 
 VAR
     button: {down, up};
-    phase: {haltDown, movingUp, haltUp, movingDown};
-    doors: {open, closed};
-    lock: {locked, unlocked};
+    phase: {halt_down, moving_up, halt_up, moving_down};
+    dstate: {open, closed};
+    lstate: {locked, unlocked};
     p: {retract_ready, extend_ready};
     completing: boolean;
 
 ASSIGN
     init(button) := down;
-    init(phase) := haltDown;
-    init(doors) := closed;
-    init(lock) := locked;
+    init(phase) := halt_down;
+    init(dstate) := closed;
+    init(lstate) := locked;
     init(p) := retract_ready;
     init(completing) := FALSE;
 
-    next(phase) := case next(button) = button & doors = closed & phase = movingUp & p = retract_ready: haltUp;
-                        next(button) = button & doors = closed & phase = movingDown & p = extend_ready: haltDown;
+    next(phase) := case next(button) = button & dstate = closed & phase = moving_up & p = retract_ready: halt_up;
+                        next(button) = button & dstate = closed & phase = moving_down & p = extend_ready: halt_down;
 
-                        button = down & next(button) = up: movingUp;
-                        button = up & next(button) = down: movingDown;
+                        button = down & next(button) = up: moving_up;
+                        button = up & next(button) = down: moving_down;
 
                         TRUE: phase;
                    esac;
 
-    next(doors) := case -- opening doors (need to update next(p) with l & lock)
-                        next(button) = button & doors = closed & lock = unlocked & phase = movingDown & p = retract_ready: open; -- & l = retract_ready
-                        next(button) = button & doors = closed & lock = unlocked & phase = movingUp & p = extend_ready: open; -- & l = extend_ready
+    next(dstate) := case -- opening dstate (need to update next(p) with l & lstate)
+                        next(button) = button & dstate = closed & lstate = unlocked & phase = moving_down & p = retract_ready: open; -- & l = retract_ready
+                        next(button) = button & dstate = closed & lstate = unlocked & phase = moving_up & p = extend_ready: open; -- & l = extend_ready
 
-                        -- closing doors
-                        next(button) = button & doors = open & phase = movingUp & p = retract_ready: closed;
-                        next(button) = button & doors = open & phase = movingDown & p = extend_ready: closed;
+                        -- closing dstate
+                        next(button) = button & dstate = open & phase = moving_up & p = retract_ready: closed;
+                        next(button) = button & dstate = open & phase = moving_down & p = extend_ready: closed;
 
-                        TRUE: doors;
+                        TRUE: dstate;
                    esac;
 
-    next(lock) := case -- unlocking doors up/down
-                       next(button) = button & lock = locked & phase = movingUp & p = extend_ready: unlocked;
-                       next(button) = button & lock = locked & phase = movingDown & p = retract_ready: unlocked;
+    next(lstate) := case -- unlocking dstate up/down
+                       next(button) = button & lstate = locked & phase = moving_up & p = extend_ready: unlocked;
+                       next(button) = button & lstate = locked & phase = moving_down & p = retract_ready: unlocked;
 
-                       -- locking doors up/down
-                       next(button) = button & doors = closed & phase = movingUp & lock = unlocked & p = retract_ready: locked;
-                       next(button) = button & doors = closed & phase = movingDown & lock = unlocked & p = extend_ready: locked;
+                       -- locking dstate up/down
+                       next(button) = button & dstate = closed & phase = moving_up & lstate = unlocked & p = retract_ready: locked;
+                       next(button) = button & dstate = closed & phase = moving_down & lstate = unlocked & p = extend_ready: locked;
 
-                       TRUE: lock;
+                       TRUE: lstate;
                   esac;
 
-    next(completing) := case p = extend_ready & phase = movingUp & doors = closed & next(button) = down: TRUE;
-                             p = retract_ready & phase = movingDown & doors = closed & next(button) = up: TRUE;
+    next(completing) := case p = extend_ready & phase = moving_up & dstate = closed & lstate = locked & next(button) = down: TRUE;
+                             p = retract_ready & phase = moving_down & dstate = closed & lstate = locked & next(button) = up: TRUE;
 
                              TRUE: FALSE;
                         esac;
 
     next(p) := case -- initiate retraction/extension
-                    button = up & phase = haltUp & next(button) = down: retract_ready;
-                    button = down & phase = haltDown & next(button) = up: extend_ready;
+                    button = up & phase = halt_up & next(button) = down: retract_ready;
+                    button = down & phase = halt_down & next(button) = up: extend_ready;
 
-                    -- opening doors
-                    next(button) = button & doors = closed & lock = unlocked & phase = movingDown & p = retract_ready: extend_ready; -- & l = retract_ready
-                    next(button) = button & doors = closed & lock = unlocked & phase = movingUp & p = extend_ready: retract_ready; -- & l = extend_ready
+                    -- opening dstate
+                    next(button) = button & dstate = closed & lstate = unlocked & phase = moving_down & p = retract_ready: extend_ready; -- & l = retract_ready
+                    next(button) = button & dstate = closed & lstate = unlocked & phase = moving_up & p = extend_ready: retract_ready; -- & l = extend_ready
 
                     -- cancel retraction/extension (1)
-                    completing = TRUE & phase = movingDown: retract_ready;
-                    completing = TRUE & phase = movingUp: extend_ready;
+                    completing = TRUE & phase = moving_down: retract_ready;
+                    completing = TRUE & phase = moving_up: extend_ready;
 
                     -- cancel retraction/extension (2)
-                    next(button) != button & doors = open & phase = movingUp & p = retract_ready: extend_ready;
-                    next(button) != button & doors = open & phase = movingDown & p = extend_ready: retract_ready;
+                    next(button) != button & dstate = open & phase = moving_up & p = retract_ready: extend_ready;
+                    next(button) != button & dstate = open & phase = moving_down & p = extend_ready: retract_ready;
+
+                    -- locking down/up
+                    dstate = closed & phase = moving_down & lstate = unlocked & p = extend_ready: retract_ready;
+                    dstate = closed & phase = moving_up & lstate = unlocked & p = retract_ready: extend_ready;
             
                     TRUE: p;
                esac;
@@ -77,21 +81,21 @@ TRANS
     completing -> next(button) = button;
 
 -- R11bis
--- LTLSPEC
---     G (button = down U phase = haltDown -> F phase = haltDown & doors = closed)
+CTLSPEC
+    A [button = down U phase = halt_down] -> EF phase = halt_down & dstate = closed
 -- -- R12bis
-LTLSPEC
-    G (button = up U phase = haltUp -> & doors = closed)
+-- LTLSPEC
+--     G (button = up U phase = halt_up -> dstate = closed & dstate = open)
 -- -- R21
 -- LTLSPEC
---     G (button = down -> phase != movingUp & phase != haltUp)
+--     G (button = down -> phase != moving_up & phase != halt_up)
 -- -- R22
 -- LTLSPEC
---     G (button = up -> phase != movingDown & phase != haltDown)
+--     G (button = up -> phase != moving_down & phase != halt_down)
 -- LTLSPEC
---     G (phase = movingUp -> button = up)
+--     G (phase = moving_up -> button = up)
 -- LTLSPEC
---     G (phase = movingDown -> button = down)
+--     G (phase = moving_down -> button = down)
 
 -- LTLSPEC
---     G (doors = open -> lock = unlocked)
+--     G (dstate = open -> lstate = unlocked)
