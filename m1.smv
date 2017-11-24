@@ -1,38 +1,42 @@
 MODULE main
 
 VAR
+    -- 'button' representa o estado do botão, o qual depende da ação do piloto. 
+    -- Como tal, o estado do botão não é determinista.
     button: {down, up};
+
+    -- 'phase' representa o estado do sistema de aterragem.
     phase: {haltDown, movingUp, haltUp, movingDown};
 
 ASSIGN
     init(button) := up;
     init(phase) := haltUp;
 
-    next(phase) := case phase = haltUp & next(button) = down: movingDown;
-                        phase = haltDown & next(button) = up: movingUp;
+    -- Após o estado inicial 'button' pode tomar qualquer um dos valores enumerados.
 
-                        phase = movingDown & next(button) = down: haltDown;
+    next(phase) := case phase = movingDown & next(button) = down: haltDown;
                         phase = movingUp & next(button) = up: haltUp;
 
-                        phase = movingDown & next(button) = up: movingUp;
-                        phase = movingUp & next(button) = down: movingDown;
+                        phase in {movingDown, haltDown} & next(button) = up: movingUp;
+                        phase in {movingUp, haltUp} & next(button) = down: movingDown;
 
                         TRUE: phase;
                     esac;
 
--- R11bis
+-- R11bis: Se o botão estiver para baixo e continuar para baixo, então 
+--         eventualmente vamos chegar à fase haltDown
 LTLSPEC
     G (button = down & next(button) = down -> F phase = haltDown)
--- R12bis
+
+-- R12bis: Se o botão estiver para cima e continuar para cima, então 
+--         eventualmente vamos chegar à fase haltUp
 LTLSPEC
     G (button = up & next(button) = up -> F phase = haltUp)
--- R21
+
+-- R21: Se o botão está para baixo, a sequência de retração nunca será observada
 LTLSPEC
     G (button = down -> phase != movingUp & phase != haltUp)
--- R22
+
+-- R22: Se o botão está para cima, a sequência de extensão nunca será observada
 LTLSPEC
     G (button = up -> phase != movingDown & phase != haltDown)
-LTLSPEC
-    G (phase = movingUp -> button = up)
-LTLSPEC
-    G (phase = movingDown -> button = down)
