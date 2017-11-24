@@ -2,7 +2,6 @@ MODULE main
 
 VAR
     -- 'button' representa o estado do botão, o qual depende da ação do piloto. 
-    -- Como tal, o estado do botão não é determinista.
     button: {down, up};
 
     -- 'phase' representa o estado do sistema de aterragem.
@@ -12,7 +11,7 @@ ASSIGN
     init(button) := up;
     init(phase) := haltUp;
 
-    -- Após o estado inicial 'button' pode tomar qualquer um dos valores enumerados.
+    -- Após o estado inicial, 'button' pode tomar qualquer um dos valores cima/baixo.
 
     next(phase) := case phase = movingDown & next(button) = down: haltDown;
                         phase = movingUp & next(button) = up: haltUp;
@@ -23,20 +22,30 @@ ASSIGN
                         TRUE: phase;
                     esac;
 
--- R11bis: Se o botão estiver para baixo e continuar para baixo, então 
---         eventualmente vamos chegar à fase haltDown
 LTLSPEC
+    -- R11bis: Para todos os estado, se o botão estiver para baixo e continuar para baixo, 
+    -- então eventualmente vamos chegar à fase haltDown
     G (button = down & next(button) = down -> F phase = haltDown)
 
--- R12bis: Se o botão estiver para cima e continuar para cima, então 
---         eventualmente vamos chegar à fase haltUp
 LTLSPEC
+    -- R12bis: Para todos os estados, se o botão estiver para cima e continuar para cima,
+    -- então eventualmente vamos chegar à fase haltUp
     G (button = up & next(button) = up -> F phase = haltUp)
 
--- R21: Se o botão está para baixo, a sequência de retração nunca será observada
 LTLSPEC
+    -- Inv3: Para todos os estados em que a fase é 'movingUp', o botão está para cima
+    G (phase = movingUp -> button = up)
+
+LTLSPEC
+    -- Inv4: Para todos os estados em que a fase é 'movingDown', o botão está para baixo
+    G (phase = movingDown -> button = down)
+
+LTLSPEC
+    -- Inv5: Para todos os estados em que o botão está para baixo, a fase não é nem
+    -- 'movingUp' nem 'haltUp'.
     G (button = down -> phase != movingUp & phase != haltUp)
 
--- R22: Se o botão está para cima, a sequência de extensão nunca será observada
 LTLSPEC
+    -- Inv6: Para todos os estados em que o botão está para cima, a fase não é nem
+    -- 'movingDown' nem 'haltDown'
     G (button = up -> phase != movingDown & phase != haltDown)
