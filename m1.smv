@@ -24,12 +24,12 @@ ASSIGN
 
 LTLSPEC
     -- R11bis: Para todos os estado, se o botão estiver para baixo e continuar para baixo, 
-    -- então eventualmente vamos chegar à fase halt_down
+    -- então eventualmente vamos chegar à fase halt_down.
     G (button = down & next(button) = down -> F phase = halt_down)
 
 LTLSPEC
     -- R12bis: Para todos os estados, se o botão estiver para cima e continuar para cima,
-    -- então eventualmente vamos chegar à fase halt_up
+    -- então eventualmente vamos chegar à fase halt_up.
     G (button = up & next(button) = up -> F phase = halt_up)
 
 LTLSPEC
@@ -46,6 +46,6 @@ LTLSPEC
     G (button = down -> phase != moving_up & phase != halt_up)
 
 LTLSPEC
-    -- Inv6: Para todos os estados em que o botão está para cima, a fase não é nem
-    -- 'moving_down' nem 'halt_down'
+    -- Inv5: Para todos os estados em que o botão está para cima, a fase não é nem
+    -- 'moving_down' nem 'halt_down'.
     G (button = up -> phase != moving_down & phase != halt_down)
