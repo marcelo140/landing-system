@@ -1,101 +1,108 @@
 MODULE main
 
+DEFINE
+    -- Verifica se o botão mudou
+    BUTTON_CHANGES := button != next(button);
+    -- Altera o valor de 'ready_for'. Equivalente ao '!' dos booleanos.
+    SWAP_READY := ready_for = extending ? retracting : extending;
+
+    -- Descreve quatro fases diferentes do sistema de acordo com o estado da porta:
+    PRE_OPEN_UP := phase = moving_up & ready_for = extending;    -- O sistema encontra-se a subir e ainda não abriu as portas.
+    POS_OPEN_UP := phase = moving_up & ready_for = retracting;   -- O sistema encontra-se a subir e já abriu as portas.
+    PRE_OPEN_DN := phase = moving_down & ready_for = retracting; -- O sistema encontra-se a descer e ainda não abriu as portas.
+    POS_OPEN_DN := phase = moving_down & ready_for = extending;  -- O sistema encontra-se a descer e já abriu as portas.
+
+    PRE_OPEN := PRE_OPEN_UP | PRE_OPEN_DN;
+    POS_OPEN := POS_OPEN_UP | POS_OPEN_DN;
+
 VAR
     button: {down, up};
-    phase: {halt_down, moving_up, halt_up, moving_down};
+    phase: {moving_down, halt_down, moving_up, halt_up};
+
+    -- Descreve o estado da porta, podendo estar aberta ou fechada.
     dstate: {open, closed};
+    -- Descreve o estado da porta, podendo estar bloqueada ou não.
     lstate: {locked, unlocked};
-    p: {retract_ready, extend_ready};
-    completing: boolean;
+    -- Variável auxiliar para que seja possível distinguir algumas fases do sistema.
+    ready_for: {retracting, extending};
+    -- Algumas das ações não podem ser interrompidas, isto é, o botão não pode mudar enquanto a ação estiver a ocorrer.
+    interruptable: boolean;
 
 ASSIGN
     init(button) := down;
     init(phase) := halt_down;
     init(dstate) := closed;
     init(lstate) := locked;
-    init(p) := retract_ready;
-    init(completing) := FALSE;
+    init(ready_for) := retracting;
+    init(interruptable) := TRUE;
 
-    next(phase) := case next(button) = button & dstate = closed & phase = moving_up & p = retract_ready: halt_up;
-                        next(button) = button & dstate = closed & phase = moving_down & p = extend_ready: halt_down;
+    next(phase) := case BUTTON_CHANGES & button = down: moving_up;
+                        BUTTON_CHANGES & button = up: moving_down;
 
-                        button = down & next(button) = up: moving_up;
-                        button = up & next(button) = down: moving_down;
+                        !BUTTON_CHANGES & dstate = closed & POS_OPEN_UP: halt_up;
+                        !BUTTON_CHANGES & dstate = closed & POS_OPEN_DN: halt_down;
 
                         TRUE: phase;
                    esac;
 
-    next(dstate) := case -- opening dstate (need to update next(p) with l & lstate)
-                        next(button) = button & dstate = closed & lstate = unlocked & phase = moving_down & p = retract_ready: open; -- & l = retract_ready
-                        next(button) = button & dstate = closed & lstate = unlocked & phase = moving_up & p = extend_ready: open; -- & l = extend_ready
+    next(dstate) := case !BUTTON_CHANGES & dstate = closed & lstate = unlocked & PRE_OPEN: open;
+                         !BUTTON_CHANGES & dstate = open: closed;
 
-                        -- closing dstate
-                        next(button) = button & dstate = open & phase = moving_up & p = retract_ready: closed;
-                        next(button) = button & dstate = open & phase = moving_down & p = extend_ready: closed;
+                         TRUE: dstate;
+                    esac;
 
-                        TRUE: dstate;
-                   esac;
+    next(lstate) := case !BUTTON_CHANGES & lstate = locked & PRE_OPEN: unlocked;
+                         !BUTTON_CHANGES & lstate = unlocked & dstate = closed & POS_OPEN: locked;
 
-    next(lstate) := case -- unlocking dstate up/down
-                       next(button) = button & lstate = locked & phase = moving_up & p = extend_ready: unlocked;
-                       next(button) = button & lstate = locked & phase = moving_down & p = retract_ready: unlocked;
+                         TRUE: lstate;
+                    esac;
 
-                       -- locking dstate up/down
-                       next(button) = button & dstate = closed & phase = moving_up & lstate = unlocked & p = retract_ready: locked;
-                       next(button) = button & dstate = closed & phase = moving_down & lstate = unlocked & p = extend_ready: locked;
+    next(interruptable) := case BUTTON_CHANGES & dstate = closed & lstate = locked & phase in {moving_up, moving_down}: FALSE;
+                                TRUE: TRUE;
+                           esac;
 
-                       TRUE: lstate;
-                  esac;
-
-    next(completing) := case p = extend_ready & phase = moving_up & dstate = closed & lstate = locked & next(button) = down: TRUE;
-                             p = retract_ready & phase = moving_down & dstate = closed & lstate = locked & next(button) = up: TRUE;
-
-                             TRUE: FALSE;
+    next(ready_for) := case -- Quando saímos de um dos estados finais (halt_up, halt_down).
+                            BUTTON_CHANGES & phase in {halt_up, halt_down}: SWAP_READY;
+                            -- Quando cancelamos a ordem de extensão/retração após as portas terem sido abertas.
+                            BUTTON_CHANGES & dstate = open: SWAP_READY;
+                            -- Qaundo abrimos as portas.
+                            next(dstate) = open: SWAP_READY;
+                            -- Quando chegamos a um dos estados finais OU após o cancelamento da ordem de extensão/retração antes das portas serem desbloqueadas.
+                            next(phase) = halt_down: retracting;
+                            next(phase) = halt_up: extending;
+            
+                            TRUE: ready_for;
                         esac;
 
-    next(p) := case -- initiate retraction/extension
-                    button = up & phase = halt_up & next(button) = down: retract_ready;
-                    button = down & phase = halt_down & next(button) = up: extend_ready;
-
-                    -- opening dstate
-                    next(button) = button & dstate = closed & lstate = unlocked & phase = moving_down & p = retract_ready: extend_ready; -- & l = retract_ready
-                    next(button) = button & dstate = closed & lstate = unlocked & phase = moving_up & p = extend_ready: retract_ready; -- & l = extend_ready
-
-                    -- cancel retraction/extension (1)
-                    completing = TRUE & phase = moving_down: retract_ready;
-                    completing = TRUE & phase = moving_up: extend_ready;
-
-                    -- cancel retraction/extension (2)
-                    next(button) != button & dstate = open & phase = moving_up & p = retract_ready: extend_ready;
-                    next(button) != button & dstate = open & phase = moving_down & p = extend_ready: retract_ready;
-
-                    -- locking down/up
-                    dstate = closed & phase = moving_down & lstate = unlocked & p = extend_ready: retract_ready;
-                    dstate = closed & phase = moving_up & lstate = unlocked & p = retract_ready: extend_ready;
-            
-                    TRUE: p;
-               esac;
-
 TRANS
-    -- Once the pilot cancels a retracting/extending order on the first stage, he must let it finish
-    completing -> next(button) = button;
+    -- Uma vez que o piloto cancele a ordem de retração/extensão ainda antes das portas terem sido desbloqueadas, é necessário esperar que o sistema volte a um dos estados finais
+    !interruptable -> next(button) = button;
 
--- R11bis
 CTLSPEC
-    A [button = down U phase = halt_down] -> EF phase = halt_down & dstate = closed
--- -- R12bis
--- LTLSPEC
---     G (button = up U phase = halt_up -> dstate = closed & dstate = open)
--- -- R21
--- LTLSPEC
---     G (button = down -> phase != moving_up & phase != halt_up)
--- -- R22
--- LTLSPEC
---     G (button = up -> phase != moving_down & phase != halt_down)
--- LTLSPEC
---     G (phase = moving_up -> button = up)
--- LTLSPEC
---     G (phase = moving_down -> button = down)
+    -- R11bis: Para todos os estado, se o botão estiver para baixo e continuar para baixo, 
+    -- então eventualmente vamos chegar à fase halt_down e as portas vão estar fechadas.
+    A [button = down U phase = halt_down] -> AF phase = halt_down & dstate = closed & lstate = locked
 
--- LTLSPEC
---     G (dstate = open -> lstate = unlocked)
+CTLSPEC
+    -- R12bis: Para todos os estados, se o botão estiver para cima e continuar para cima,
+    -- então eventualmente vamos chegar à fase halt_up e as portas vão estar fechadas.
+    A [button = up U phase = halt_up] -> AF phase = halt_up & dstate = closed & lstate = locked
+
+LTLSPEC
+    G (button = down -> phase != moving_up & phase != halt_up)
+
+LTLSPEC
+    G (button = up -> phase != moving_down & phase != halt_down)
+
+LTLSPEC
+    G (phase = moving_up -> button = up)
+
+LTLSPEC
+    G (phase = moving_down -> button = down)
+
+LTLSPEC
+    -- Inv7: Em todos os estados que a porta esteja aberta, a porta está desbloqueada.
+    G (dstate = open -> lstate = unlocked)
+LTLSPEC
+    -- Em todos os estados que a porta esteja bloqueada, a porta está fechada.
+    G (lstate = locked -> dstate = closed)
