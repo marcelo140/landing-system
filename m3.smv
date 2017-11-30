@@ -1,19 +1,15 @@
 MODULE main
 
 DEFINE
-    -- Verifica se o botão mudou
     BUTTON_CHANGES := button != next(button);
-    -- Altera o valor de 'ready_for'. Equivalente ao '!' dos booleanos.
     SWAP_READY := ready_for = extended_ready ? retracted_ready : extended_ready;
 
-    -- Altera o valor do gstate
     SWAP_GEARS := gstate = extended ? retracted : extended;
 
-    -- Descreve quatro fases diferentes do sistema de acordo com o estado da porta:
-    PRE_OPEN_UP := phase = moving_up & ready_for = extended_ready;    -- O sistema encontra-se a subir e ainda não abriu as portas.
-    POS_OPEN_UP := phase = moving_up & ready_for = retracted_ready;   -- O sistema encontra-se a subir e já abriu as portas.
-    PRE_OPEN_DN := phase = moving_down & ready_for = retracted_ready; -- O sistema encontra-se a descer e ainda não abriu as portas.
-    POS_OPEN_DN := phase = moving_down & ready_for = extended_ready;  -- O sistema encontra-se a descer e já abriu as portas.
+    PRE_OPEN_UP := phase = moving_up & ready_for = extended_ready;
+    POS_OPEN_UP := phase = moving_up & ready_for = retracted_ready;
+    PRE_OPEN_DN := phase = moving_down & ready_for = retracted_ready;
+    POS_OPEN_DN := phase = moving_down & ready_for = extended_ready;
 
     PRE_OPEN := PRE_OPEN_UP | PRE_OPEN_DN;
     POS_OPEN := POS_OPEN_UP | POS_OPEN_DN;
@@ -26,13 +22,9 @@ VAR
     button: {down, up};
     phase: {moving_down, halt_down, moving_up, halt_up};
 
-    -- Descreve o estado da porta, podendo estar aberta ou fechada.
     dstate: {open, closed};
-    -- Descreve o estado da porta, podendo estar bloqueada ou não.
     lstate: {locked, unlocked};
-    -- Variável auxiliar para que seja possível distinguir algumas fases do sistema.
     ready_for: {retracted_ready, extended_ready};
-    -- Algumas das ações não podem ser interrompidas, isto é, o botão não pode mudar enquanto a ação estiver a ocorrer.
     interruptible: boolean;
     -- Variável sobre o estado dos gears
     gstate: {extended, extending, retracted, retracting, none};
@@ -82,8 +74,7 @@ ASSIGN
                                 TRUE: interruptible;
                            esac;
 
-    next(ready_for) := case -- Quando cancelamos a ordem de extensão/retração após as portas terem sido abertas.
-                            BUTTON_CHANGES & dstate = open: SWAP_READY;
+    next(ready_for) := case BUTTON_CHANGES & dstate = open: SWAP_READY;
                             -- Quando entra no estado opening_DN ou opening_UP
                             !BUTTON_CHANGES & RETRACTION_INIT: retracted_ready;
                             !BUTTON_CHANGES & EXTENSION_INIT: extended_ready;
@@ -104,17 +95,12 @@ ASSIGN
                     esac;
 
 TRANS
-    -- Uma vez que o piloto cancele a ordem de retração/extensão ainda antes das portas terem sido desbloqueadas, é necessário esperar que o sistema volte a um dos estados finais
     !interruptible -> next(button) = button;
 
 CTLSPEC
-    -- R11bis: Para todos os estado, se o botão estiver para baixo e continuar para baixo, 
-    -- então eventualmente vamos chegar à fase halt_down e as portas vão estar fechadas.
     A [button = down U phase = halt_down] -> AF phase = halt_down & dstate = closed & lstate = locked
 
 CTLSPEC
-    -- R12bis: Para todos os estados, se o botão estiver para cima e continuar para cima,
-    -- então eventualmente vamos chegar à fase halt_up e as portas vão estar fechadas.
     A [button = up U phase = halt_up] -> AF phase = halt_up & dstate = closed & lstate = locked
 
 LTLSPEC
@@ -130,17 +116,15 @@ LTLSPEC
     G (phase = moving_down -> button = down)
 
 LTLSPEC
-    -- Inv7: Em todos os estados que a porta esteja aberta, a porta está desbloqueada.
     G (dstate = open -> lstate = unlocked)
 LTLSPEC
-    -- Em todos os estados que a porta esteja bloqueada, a porta está fechada.
     G (lstate = locked -> dstate = closed)
 
 LTLSPEC
     -- Se o botão estiver para baixo então a fase de retracção não se verifica
-    G (button = down -> gstate != retracting)
+    G (G button = down -> gstate != retracting)
 
 LTLSPEC
     -- Se o botão estiver para cima então a fase de extensão não se verifica
-    G (button = up -> gstate != extending)
+    G (G button = up -> gstate != extending)
 
