@@ -2,13 +2,13 @@ MODULE main
 
 DEFINE
     BUTTON_CHANGES := button != next(button);
-    SWAP_READY := ready_for = extended_ready ? retracted_ready : extended_ready;
+    SWAP_READY := ready_for = retracting ? extending : retracting;
     SWAP_GEARS := gstate = extended ? retracted : extended;
 
-    PRE_OPEN_UP := phase = moving_up & ready_for = extended_ready;
-    POS_OPEN_UP := phase = moving_up & ready_for = retracted_ready;
-    PRE_OPEN_DN := phase = moving_down & ready_for = retracted_ready;
-    POS_OPEN_DN := phase = moving_down & ready_for = extended_ready;
+    PRE_OPEN_UP := phase = moving_up & ready_for = retracting;
+    POS_OPEN_UP := phase = moving_up & ready_for = extending;
+    PRE_OPEN_DN := phase = moving_down & ready_for = extending;
+    POS_OPEN_DN := phase = moving_down & ready_for = retracting;
 
     PRE_OPEN := PRE_OPEN_UP | PRE_OPEN_DN;
     POS_OPEN := POS_OPEN_UP | POS_OPEN_DN;
@@ -23,7 +23,7 @@ VAR
 
     dstate: {open, closed};
     lstate: {locked, unlocked};
-    ready_for: {retracted_ready, extended_ready};
+    ready_for: {extending, retracting};
     interruptible: boolean;
     -- Variável sobre o estado das engrenagens.
     gstate: {extended, extending, retracted, retracting, none};
@@ -33,7 +33,7 @@ ASSIGN
     init(phase) := halt_down;
     init(dstate) := closed;
     init(lstate) := locked;
-    init(ready_for) := extended_ready;
+    init(ready_for) := retracting;
     init(interruptible) := TRUE;
     init(gstate) := extended;
 
@@ -72,17 +72,17 @@ ASSIGN
 
     next(ready_for) := case BUTTON_CHANGES & dstate = open: SWAP_READY;
                             -- Quando entra no estado opening_DN ou opening_UP
-                            !BUTTON_CHANGES & RETRACTION_INIT: retracted_ready;
-                            !BUTTON_CHANGES & EXTENSION_INIT: extended_ready;
+                            !BUTTON_CHANGES & RETRACTION_INIT: extending;
+                            !BUTTON_CHANGES & EXTENSION_INIT: retracting;
             
                             TRUE: ready_for;
                         esac;
 
     next(gstate) := case -- Extensão/Retracção das engrenagens
-                         gstate = retracted & phase = moving_down & ready_for = extended_ready: extending;
+                         gstate = retracted & phase = moving_down & ready_for = retracting: extending;
                          gstate = extending: extended;
                          -- Finalização do ciclo
-                         gstate = extended & phase = moving_up & ready_for = retracted_ready: retracting;
+                         gstate = extended & phase = moving_up & ready_for = extending: retracting;
                          gstate = retracting: retracted;
                          -- Se o botão mudar, as engrenagens também mudam
                          BUTTON_CHANGES & dstate = open: SWAP_GEARS;
