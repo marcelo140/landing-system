@@ -78,15 +78,16 @@ TRANS
     -- Uma vez que o piloto cancele a ordem de retração/extensão ainda antes das portas terem sido desbloqueadas, é necessário esperar que o sistema volte a um dos estados finais
     !interruptable -> next(button) = button;
 
-CTLSPEC
+LTLSPEC
     -- R11bis: Para todos os estado, se o botão estiver para baixo e continuar para baixo, 
     -- então eventualmente vamos chegar à fase halt_down e as portas vão estar fechadas.
-    A [button = down U phase = halt_down] -> AF phase = halt_down & dstate = closed & lstate = locked
+    G (G button = down -> F (phase = halt_down & dstate = closed & lstate = locked))
 
-CTLSPEC
+LTLSPEC
     -- R12bis: Para todos os estados, se o botão estiver para cima e continuar para cima,
     -- então eventualmente vamos chegar à fase halt_up e as portas vão estar fechadas.
-    A [button = up U phase = halt_up] -> AF phase = halt_up & dstate = closed & lstate = locked
+    G (G button = up -> F (phase = halt_up & dstate = closed & lstate = locked))
+
 
 LTLSPEC
     G (button = down -> phase != moving_up & phase != halt_up)

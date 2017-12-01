@@ -97,11 +97,11 @@ ASSIGN
 TRANS
     !interruptible -> next(button) = button;
 
-CTLSPEC
-    A [button = down U phase = halt_down] -> AF phase = halt_down & dstate = closed & lstate = locked
+LTLSPEC
+    G (G button = down -> F (phase = halt_down & dstate = closed & lstate = locked))
 
-CTLSPEC
-    A [button = up U phase = halt_up] -> AF phase = halt_up & dstate = closed & lstate = locked
+LTLSPEC
+    G (G button = up -> F (phase = halt_up & dstate = closed & lstate = locked))
 
 LTLSPEC
     G (button = down -> phase != moving_up & phase != halt_up)
