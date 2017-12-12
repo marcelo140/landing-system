@@ -1,41 +1,98 @@
 MODULE main
 
-DEFINE
-    -- Verifica se o botão mudou
-    BUTTON_CHANGES := button != next(button);
-    -- Altera o valor de 'ready_for'. Equivalente ao '!' dos booleanos.
-    SWAP_READY := ready_for = extending ? retracting : extending;
+/--
+Nesta segunda fase foi aumentada a complexidade da transição do estado 'halt_down' para
+'halt_up' e vice-versa. Foram acrescentados dois novos componentes ao sistema: a porta
+e o cadeado da porta. Para transitar de um estado em que o sistema se encontra parado,
+para a fase oposta, é necessário primeiro abrir e fechar a porta. Para que esta
+abra, o cadeado deve ser primeiro desbloqueado.
 
-    -- Descreve quatro fases diferentes do sistema de acordo com o estado da porta:
-    PRE_OPEN_UP := phase = moving_up & ready_for = extending;    -- O sistema encontra-se a subir e ainda não abriu as portas.
-    POS_OPEN_UP := phase = moving_up & ready_for = retracting;   -- O sistema encontra-se a subir e já abriu as portas.
-    PRE_OPEN_DN := phase = moving_down & ready_for = retracting; -- O sistema encontra-se a descer e ainda não abriu as portas.
-    POS_OPEN_DN := phase = moving_down & ready_for = extending;  -- O sistema encontra-se a descer e já abriu as portas.
+Segunda a figura 3 do enunciado, todas as ações são interruptíveis, com exceção do PD2 e
+do PU2, os quais uma vez executados, devem seguir obrigatoriamente para o CompletePD2 e 
+CompletePU2.
 
-    PRE_OPEN := PRE_OPEN_UP | PRE_OPEN_DN;
-    POS_OPEN := POS_OPEN_UP | POS_OPEN_DN;
+Escolhemos ainda não utilizar as variáveis 'p', 'l' e 'i' que surgem no modelo de Event-B. 
+Isto porque, para além não compreendermos a semântica e o comportamento destas três
+variáveis, concluímos que conseguiamos modelar corretamente o sistema especificado em M2
+recorrendo a apenas duas variáveis auxiliares com uma semântica bem definida.
+--/
 
 VAR
     button: {down, up};
     phase: {moving_down, halt_down, moving_up, halt_up};
 
-    -- Descreve o estado da porta, podendo estar aberta ou fechada.
+    /--
+    A variável 'dstate' descreve o estado da porta, podendo estar aberta ou fechada.
+    --/
     dstate: {open, closed};
-    -- Descreve o estado da porta, podendo estar bloqueada ou não.
+
+    /--
+    A variável 'lstate' descreve o estado do cadeado da porta, podendo estar bloqueado 
+    ou não.
+    --/
     lstate: {locked, unlocked};
-    -- Variável auxiliar para que seja possível distinguir algumas fases do sistema.
-    ready_for: {retracting, extending};
-    -- Algumas das ações não podem ser interrompidas, isto é, o botão não pode mudar enquanto a ação estiver a ocorrer.
+
+    /--
+    A variável 'gears' é uma variável auxiliar que é necessária para distinguir certos
+    estados do sistema que possuem os mesmos valores mas em alturas diferentes.
+    --/
+    gears: {retracted, extended};
+
+    /--
+    A variável 'interruptable' é outra variável auxiliar. Esta é necessária porque algumas
+    das ações não podem ser interrompidas, ou seja, o estado do botão não pode ser
+    alterado enquanto a ação estiver a ocorrer.
+    --/
     interruptable: boolean;
 
+/--
+Nesta fase decidimos utilizar o DEFINE para aumentar a legibilidade de alguns padrões que
+ocorrem várias vezes.
+--/
+DEFINE
+    /--
+    'BUTTON_CHANGES' verifica se o botão mudará na próxima fase.
+    --/
+    BUTTON_CHANGES := button != next(button);
+
+    /--
+    'SWAP_GEARS' altera o valor da variável 'gears' da mesma forma que '!' altera
+    o valor de um boleano.
+    --/
+    SWAP_GEARS := gears = extended ? retracted : extended;
+
+    /--
+    Descreve quatro fases diferentes do sistema de acordo com o estado da porta
+    e a direção do movimento.
+    --/
+    -- O sistema encontra-se a subir e ainda não abriu as portas.
+    PRE_OPEN_UP := phase = moving_up & gears = extended;
+    -- O sistema encontra-se a subir e já abriu as portas. 
+    POS_OPEN_UP := phase = moving_up & gears = retracted;   
+    -- O sistema encontra-se a descer e ainda não abriu as portas.
+    PRE_OPEN_DN := phase = moving_down & gears = retracted;
+    -- O sistema encontra-se a descer e já abriu as portas.
+    POS_OPEN_DN := phase = moving_down & gears = extended;
+
+    /--
+    Descreve duas fases diferentes do sistema de acordo com o estado da porta.
+    --/
+    PRE_OPEN := PRE_OPEN_UP | PRE_OPEN_DN;
+    POS_OPEN := POS_OPEN_UP | POS_OPEN_DN;
+
 ASSIGN
+    -- Declarações iniciais de acordo com a figura 3 do enunciado.
     init(button) := down;
     init(phase) := halt_down;
     init(dstate) := closed;
     init(lstate) := locked;
-    init(ready_for) := retracting;
+    init(gears) := extended;
     init(interruptable) := TRUE;
 
+    /--
+    Dada a introdução das novas variáveis, foi necessário especificar de forma mais precisa 
+    as condições necessárias para que o sistema atinja uma das fases finais.
+    --/
     next(phase) := case BUTTON_CHANGES & button = down: moving_up;
                         BUTTON_CHANGES & button = up: moving_down;
 
@@ -45,65 +102,125 @@ ASSIGN
                         TRUE: phase;
                    esac;
 
-    next(dstate) := case !BUTTON_CHANGES & dstate = closed & lstate = unlocked & PRE_OPEN: open;
+    /--
+    Sempre que o sistema esteja em movimento, caso a porta ainda não tenha sido aberta mas o cadeado já
+    se encontra desbloqueado, esta abre-se. Sempre que porta esteja aberta, esta fecha-se.
+    --/
+    next(dstate) := case !BUTTON_CHANGES & lstate = unlocked & PRE_OPEN: open;
                          !BUTTON_CHANGES & dstate = open: closed;
 
                          TRUE: dstate;
                     esac;
 
+    /--
+    Sempre que o sistema esteja em movimento, caso o cadeado se encontre fechado mas a porta ainda não
+    tenha sido aberta, este desbloqueia-se. Assim que a porta já tenha sido aberta e novamente fechada, 
+    este bloqueia-se.
+    --/
     next(lstate) := case !BUTTON_CHANGES & lstate = locked & PRE_OPEN: unlocked;
-                         !BUTTON_CHANGES & lstate = unlocked & dstate = closed & POS_OPEN: locked;
+                         !BUTTON_CHANGES & dstate = closed & POS_OPEN: locked;
 
                          TRUE: lstate;
                     esac;
 
-    next(interruptable) := case BUTTON_CHANGES & dstate = closed & lstate = locked & phase in {moving_up, moving_down}: FALSE;
+    /--
+    Se o sistema se encontra em movimento e o cadeado ainda não foi desbloqueado, a próxima ação
+    não poderá ser interrompida. Isto permite que o sistema volte a um estado em que se encontre parado
+    tal como descrito na figura 3 do enunciado.
+    --/
+    next(interruptable) := case BUTTON_CHANGES & lstate = locked & phase in {moving_up, moving_down}: FALSE;
                                 TRUE: TRUE;
                            esac;
 
-    next(ready_for) := case -- Quando saímos de um dos estados finais (halt_up, halt_down).
-                            BUTTON_CHANGES & phase in {halt_up, halt_down}: SWAP_READY;
-                            -- Quando cancelamos a ordem de extensão/retração após as portas terem sido abertas.
-                            BUTTON_CHANGES & dstate = open: SWAP_READY;
-                            -- Qaundo abrimos as portas.
-                            next(dstate) = open: SWAP_READY;
-                            -- Quando chegamos a um dos estados finais OU após o cancelamento da ordem de extensão/retração antes das portas serem desbloqueadas.
-                            next(phase) = halt_down: retracting;
-                            next(phase) = halt_up: extending;
-            
-                            TRUE: ready_for;
-                        esac;
+    /--
+    Assim que as portas se abram, as engrenagens passam de 'retraídas' para 'extendidas' e
+    vice-versa. Caso a direção do movimento seja alterada enquanto as portas se encontrem abertas,
+    o estado das engrenagens inverte-se novamente.
+    --/
+    next(gears) := case BUTTON_CHANGES & dstate = open: SWAP_GEARS;
+                        next(dstate) = open: SWAP_GEARS;
 
+                        TRUE: gears;
+                   esac;
+
+/-- 
+Decidimos tirar partido do TRANS para eliminar todas as transições em que o estado do botão
+muda quando a ação não pode ser interrompida. Garantimos assim que, quando uma ação não é
+interruptível, o estado do botão mantem-se constante.
+--/
 TRANS
-    -- Uma vez que o piloto cancele a ordem de retração/extensão ainda antes das portas terem sido desbloqueadas, é necessário esperar que o sistema volte a um dos estados finais
     !interruptable -> next(button) = button;
 
+/--
+Aqui verificamos que o modelo construído, para além de verificar as condições impostas
+pelo M1, verifica também algumas condições que consideramos necessárias para comprovar
+a validade do modelo.
+--/
+
 LTLSPEC
-    -- R11bis: Para todos os estado, se o botão estiver para baixo e continuar para baixo, 
-    -- então eventualmente vamos chegar à fase halt_down e as portas vão estar fechadas.
+    /--
+    Foi necessário atualizar o R11bis com as novas variáveis: Para todos os estado, 
+    se o botão estiver para baixo e continuar para baixo, então eventualmente vamos 
+    chegar à fase halt_down e as portas vão estar fechadas.
+    --/
     G (G button = down -> F (phase = halt_down & dstate = closed & lstate = locked))
 
 LTLSPEC
-    -- R12bis: Para todos os estados, se o botão estiver para cima e continuar para cima,
-    -- então eventualmente vamos chegar à fase halt_up e as portas vão estar fechadas.
+    /--
+    Foi necessário atualizar o R12bis com as novas variáveis: Para todos os estados,
+    se o botão estiver para cima e continuar para cima, então eventualmente vamos chegar
+    à fase halt_up e as portas vão estar fechadas.
+    --/
     G (G button = up -> F (phase = halt_up & dstate = closed & lstate = locked))
 
+LTLSPEC
+    G (phase in {moving_up, halt_up} -> button = up)
 
 LTLSPEC
-    G (button = down -> phase != moving_up & phase != halt_up)
+    G (phase in {moving_down, halt_down} -> button = down)
 
 LTLSPEC
-    G (button = up -> phase != moving_down & phase != halt_down)
-
-LTLSPEC
-    G (phase = moving_up -> button = up)
-
-LTLSPEC
-    G (phase = moving_down -> button = down)
-
-LTLSPEC
-    -- Inv7: Em todos os estados que a porta esteja aberta, a porta está desbloqueada.
+    /--
+    Para todos os estados que a porta se encontra aberta, o cadeado está desbloqueado.
+    --/
     G (dstate = open -> lstate = unlocked)
+
 LTLSPEC
-    -- Em todos os estados que a porta esteja bloqueada, a porta está fechada.
+    /--
+    Para todos os estados que o cadeado se encontra bloqueado, a porta está fechada.
+    --/
     G (lstate = locked -> dstate = closed)
+
+LTLSPEC
+    /--
+    Sempre que a porta está aberta e o sistema está a extender-se, as engrenagens
+    estão extendidas.
+    --/
+    G (dstate = open & phase = moving_down -> gears = extended)
+
+LTLSPEC
+    /--
+    Sempre que a porta está aberta e o sistema está a retrair-se, as engrenagens
+    estão retraídas.
+    --/
+    G (dstate = open & phase = moving_up -> gears = retracted)
+
+LTLSPEC
+    /--
+    Sempre que a o sistema está completamento extendido, as engrenagens estão
+    extendidas.
+    --/
+    G (phase = halt_down -> gears = extended)
+
+LTLSPEC
+    /--
+    Sempre que a o sistema está completamento retraído, as engrenagens estão
+    retraídas.
+    --/
+    G (phase = halt_up -> gears = retracted)
+
+LTLSPEC
+    /--
+    Sempre que uma ação é ininterruptível, o estado do botão não se alterará. 
+    --/
+    G (!interruptable -> button = next(button))
