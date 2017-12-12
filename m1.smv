@@ -1,18 +1,40 @@
 MODULE main
 
+/--
+Nesta primeira fase é apenas necessário representar duas diferentes fases do sistema:
+  - quando este está parado, quer em cima como em baixo;
+  - quando este está em movimento, quer para cima como para baixo.
+A fase em que o sistema se encontra depende do estado do botão, o qual pode mudar a
+qualquer momento de acordo com a vontade do piloto.
+--/
+
 VAR
-    -- 'button' representa o estado do botão, o qual depende da ação do piloto. 
+    /--
+    A variável 'button' representa o estado do botão, o qual depende apenas das ações 
+    do piloto. 
+    --/
     button: {down, up};
 
-    -- 'phase' representa o estado do sistema de aterragem.
+    /--
+    A variável 'phase' representa o estado do sistema de aterragem, a qual depende do
+    seu estado anterior e do estado do botão.
+    --/
     phase: {moving_down, halt_down, moving_up, halt_up};
 
 ASSIGN
+    -- Declarações iniciais de acordo com a figura 2 do enunciado.
     init(button) := up;
     init(phase) := halt_up;
 
-    -- Após o estado inicial, 'button' pode tomar qualquer um dos valores cima/baixo.
+    /--
+    Após o estado inicial, o botão pode tomar qualquer um dos valores do seu domínio,
+    pelo que não é necessário especificar nenhuma cláusula 'next'.
+    --/
 
+    /--
+    O estado de 'phase' evolui de acordo com o seu estado atual e o estado do botão. As
+    transições aqui modeladas equivalem às transições da figura 2 do enunciado.
+    --/
     next(phase) := case phase = moving_down & next(button) = down: halt_down;
                         phase = moving_up & next(button) = up: halt_up;
 
@@ -22,31 +44,36 @@ ASSIGN
                         TRUE: phase;
                     esac;
 
+
+/--
+Aqui verificamos que o modelo construído verifica as condições impostas pelos requisitos
+R11bis e R12bis. Acrescentamos ainda algumas verificações que consideramos importantes.
+--/
+
 LTLSPEC
-    -- R11bis: Para todos os estado, se o botão estiver para baixo e continuar para baixo, 
-    -- então eventualmente vamos chegar à fase halt_down.
+    /--
+    R11bis: Para todos os estado, se o botão estiver para baixo e continuar para baixo, 
+    então eventualmente vamos chegar à fase halt_down.
+    --/
     G (G button = down -> F phase = halt_down)
 
 LTLSPEC
-    -- R12bis: Para todos os estados, se o botão estiver para cima e continuar para cima,
-    -- então eventualmente vamos chegar à fase halt_up.
+    /--
+    R12bis: Para todos os estados, se o botão estiver para cima e continuar para cima,
+    então eventualmente vamos chegar à fase halt_up.
+    --/
     G (G button = up -> F phase = halt_up)
 
+LTLSPEC
+    /--
+    Para todos os estados em que o sistema se encontra na fase de retração, o botão 
+    está para cima.
+    --/
+    G (phase in {moving_up, halt_up} -> button = up)
 
 LTLSPEC
-    -- Inv3: Para todos os estados em que a fase é 'moving_up', o botão está para cima
-    G (phase = moving_up -> button = up)
-
-LTLSPEC
-    -- Inv4: Para todos os estados em que a fase é 'moving_down', o botão está para baixo
-    G (phase = moving_down -> button = down)
-
-LTLSPEC
-    -- Inv5: Para todos os estados em que o botão está para baixo, a fase não é nem
-    -- 'moving_up' nem 'halt_up'.
-    G (button = down -> phase != moving_up & phase != halt_up)
-
-LTLSPEC
-    -- Inv5: Para todos os estados em que o botão está para cima, a fase não é nem
-    -- 'moving_down' nem 'halt_down'.
-    G (button = up -> phase != moving_down & phase != halt_down)
+    /--
+    Para todos os estados em que o sistema se encontra na fase de extensão, o botão 
+    está para baixo.
+    --/
+    G (phase in {moving_down, halt_down} -> button = down)
