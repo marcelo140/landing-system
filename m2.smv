@@ -39,11 +39,11 @@ VAR
     gears: {retracted, extended};
 
     /--
-    A variável 'interruptable' é outra variável auxiliar. Esta é necessária porque algumas
+    A variável 'interruptible' é outra variável auxiliar. Esta é necessária porque algumas
     das ações não podem ser interrompidas, ou seja, o estado do botão não pode ser
     alterado enquanto a ação estiver a ocorrer.
     --/
-    interruptable: boolean;
+    interruptible: boolean;
 
 /--
 Nesta fase decidimos utilizar o DEFINE para aumentar a legibilidade de alguns padrões que
@@ -87,7 +87,7 @@ ASSIGN
     init(dstate) := closed;
     init(lstate) := locked;
     init(gears) := extended;
-    init(interruptable) := TRUE;
+    init(interruptible) := TRUE;
 
     /--
     Dada a introdução das novas variáveis, foi necessário especificar de forma mais precisa 
@@ -128,7 +128,7 @@ ASSIGN
     não poderá ser interrompida. Isto permite que o sistema volte a um estado em que se encontre parado
     tal como descrito na figura 3 do enunciado.
     --/
-    next(interruptable) := case BUTTON_CHANGES & lstate = locked & phase in {moving_up, moving_down}: FALSE;
+    next(interruptible) := case BUTTON_CHANGES & lstate = locked & phase in {moving_up, moving_down}: FALSE;
                                 TRUE: TRUE;
                            esac;
 
@@ -149,7 +149,7 @@ muda quando a ação não pode ser interrompida. Garantimos assim que, quando um
 interruptível, o estado do botão mantem-se constante.
 --/
 TRANS
-    !interruptable -> next(button) = button;
+    !interruptible -> next(button) = button;
 
 /--
 Aqui verificamos que o modelo construído, para além de verificar as condições impostas
@@ -223,4 +223,4 @@ LTLSPEC
     /--
     Sempre que uma ação é ininterruptível, o estado do botão não se alterará. 
     --/
-    G (!interruptable -> button = next(button))
+    G (!interruptible -> button = next(button))
