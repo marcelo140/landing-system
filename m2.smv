@@ -33,10 +33,10 @@ VAR
     lstate: {locked, unlocked};
 
     /--
-    A variável 'gears' é uma variável auxiliar que é necessária para distinguir certos
+    A variável 'gstate' é uma variável auxiliar que é necessária para distinguir certos
     estados do sistema que possuem os mesmos valores mas em alturas diferentes.
     --/
-    gears: {retracted, extended};
+    gstate: {retracted, extended};
 
     /--
     A variável 'interruptible' é outra variável auxiliar. Esta é necessária porque algumas
@@ -56,23 +56,23 @@ DEFINE
     BUTTON_CHANGES := button != next(button);
 
     /--
-    'SWAP_GEARS' altera o valor da variável 'gears' da mesma forma que '!' altera
+    'SWAP_GEARS' altera o valor da variável 'gstate' da mesma forma que '!' altera
     o valor de um boleano.
     --/
-    SWAP_GEARS := gears = extended ? retracted : extended;
+    SWAP_GEARS := gstate = extended ? retracted : extended;
 
     /--
     Descreve quatro fases diferentes do sistema de acordo com o estado da porta
     e a direção do movimento.
     --/
     -- O sistema encontra-se a subir e ainda não abriu as portas.
-    PRE_OPEN_UP := phase = moving_up & gears = extended;
+    PRE_OPEN_UP := phase = moving_up & gstate = extended;
     -- O sistema encontra-se a subir e já abriu as portas. 
-    POS_OPEN_UP := phase = moving_up & gears = retracted;   
+    POS_OPEN_UP := phase = moving_up & gstate = retracted;   
     -- O sistema encontra-se a descer e ainda não abriu as portas.
-    PRE_OPEN_DN := phase = moving_down & gears = retracted;
+    PRE_OPEN_DN := phase = moving_down & gstate = retracted;
     -- O sistema encontra-se a descer e já abriu as portas.
-    POS_OPEN_DN := phase = moving_down & gears = extended;
+    POS_OPEN_DN := phase = moving_down & gstate = extended;
 
     /--
     Descreve duas fases diferentes do sistema de acordo com o estado da porta.
@@ -86,7 +86,7 @@ ASSIGN
     init(phase) := halt_down;
     init(dstate) := closed;
     init(lstate) := locked;
-    init(gears) := extended;
+    init(gstate) := extended;
     init(interruptible) := TRUE;
 
     /--
@@ -137,10 +137,10 @@ ASSIGN
     vice-versa. Caso a direção do movimento seja alterada enquanto as portas se encontrem abertas,
     o estado das engrenagens inverte-se novamente.
     --/
-    next(gears) := case BUTTON_CHANGES & dstate = open: SWAP_GEARS;
+    next(gstate) := case BUTTON_CHANGES & dstate = open: SWAP_GEARS;
                         next(dstate) = open: SWAP_GEARS;
 
-                        TRUE: gears;
+                        TRUE: gstate;
                    esac;
 
 /-- 
@@ -196,28 +196,28 @@ LTLSPEC
     Sempre que a porta está aberta e o sistema está a extender-se, as engrenagens
     estão extendidas.
     --/
-    G (dstate = open & phase = moving_down -> gears = extended)
+    G (dstate = open & phase = moving_down -> gstate = extended)
 
 LTLSPEC
     /--
     Sempre que a porta está aberta e o sistema está a retrair-se, as engrenagens
     estão retraídas.
     --/
-    G (dstate = open & phase = moving_up -> gears = retracted)
+    G (dstate = open & phase = moving_up -> gstate = retracted)
 
 LTLSPEC
     /--
     Sempre que a o sistema está completamento extendido, as engrenagens estão
     extendidas.
     --/
-    G (phase = halt_down -> gears = extended)
+    G (phase = halt_down -> gstate = extended)
 
 LTLSPEC
     /--
     Sempre que a o sistema está completamento retraído, as engrenagens estão
     retraídas.
     --/
-    G (phase = halt_up -> gears = retracted)
+    G (phase = halt_up -> gstate = retracted)
 
 LTLSPEC
     /--
