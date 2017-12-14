@@ -90,8 +90,8 @@ ASSIGN
     init(interruptible) := TRUE;
 
     /--
-    Dada a introdução das novas variáveis, foi necessário especificar de forma mais precisa 
-    as condições necessárias para que o sistema atinja uma das fases finais.
+    Dada a introdução das novas variáveis, foi necessário especificar de forma mais
+    precisa as condições necessárias para que o sistema atinja uma das fases finais.
     --/
     next(phase) := case BUTTON_CHANGES & button = down: moving_up;
                         BUTTON_CHANGES & button = up: moving_down;
@@ -103,19 +103,20 @@ ASSIGN
                    esac;
 
     /--
-    Sempre que o sistema esteja em movimento, caso a porta ainda não tenha sido aberta mas o cadeado já
-    se encontra desbloqueado, esta abre-se. Sempre que porta esteja aberta, esta fecha-se.
+    Sempre que o sistema esteja em movimento, caso a porta ainda não tenha sido aberta 
+    mas o cadeado já se encontra desbloqueado, esta abre-se. Sempre que porta esteja
+    aberta, esta fecha-se.
     --/
-    next(dstate) := case !BUTTON_CHANGES & lstate = unlocked & PRE_OPEN: open;
+    next(dstate) := case !BUTTON_CHANGES & PRE_OPEN & lstate = unlocked: open;
                          !BUTTON_CHANGES & dstate = open: closed;
 
                          TRUE: dstate;
                     esac;
 
     /--
-    Sempre que o sistema esteja em movimento, caso o cadeado se encontre fechado mas a porta ainda não
-    tenha sido aberta, este desbloqueia-se. Assim que a porta já tenha sido aberta e novamente fechada, 
-    este bloqueia-se.
+    Sempre que o sistema esteja em movimento, caso o cadeado se encontre fechado mas 
+    a porta ainda não tenha sido aberta, este desbloqueia-se. Assim que a porta já 
+    tenha sido aberta e novamente fechada, este bloqueia-se.
     --/
     next(lstate) := case !BUTTON_CHANGES & lstate = locked & PRE_OPEN: unlocked;
                          !BUTTON_CHANGES & dstate = closed & POS_OPEN: locked;
@@ -124,9 +125,9 @@ ASSIGN
                     esac;
 
     /--
-    Se o sistema se encontra em movimento e o cadeado ainda não foi desbloqueado, a próxima ação
-    não poderá ser interrompida. Isto permite que o sistema volte a um estado em que se encontre parado
-    tal como descrito na figura 3 do enunciado.
+    Se o sistema se encontra em movimento e o cadeado ainda não foi desbloqueado, 
+    a próxima ação não poderá ser interrompida. Isto permite que o sistema volte a 
+    um estado em que se encontre parado tal como descrito na figura 3 do enunciado.
     --/
     next(interruptible) := case BUTTON_CHANGES & lstate = locked & phase in {moving_up, moving_down}: FALSE;
                                 TRUE: TRUE;
@@ -134,8 +135,8 @@ ASSIGN
 
     /--
     Assim que as portas se abram, as engrenagens passam de 'retraídas' para 'extendidas' e
-    vice-versa. Caso a direção do movimento seja alterada enquanto as portas se encontrem abertas,
-    o estado das engrenagens inverte-se novamente.
+    vice-versa. Caso a direção do movimento seja alterada enquanto as portas se encontrem
+    abertas, o estado das engrenagens inverte-se novamente.
     --/
     next(gstate) := case BUTTON_CHANGES & dstate = open: SWAP_GEARS;
                         next(dstate) = open: SWAP_GEARS;
@@ -163,7 +164,7 @@ LTLSPEC
     se o botão estiver para baixo e continuar para baixo, então eventualmente vamos 
     chegar à fase halt_down e as portas vão estar fechadas.
     --/
-    G (G button = down -> F (phase = halt_down & dstate = closed & lstate = locked))
+    G (G button = down -> F (phase = halt_down & lstate = locked))
 
 LTLSPEC
     /--
@@ -171,7 +172,9 @@ LTLSPEC
     se o botão estiver para cima e continuar para cima, então eventualmente vamos chegar
     à fase halt_up e as portas vão estar fechadas.
     --/
-    G (G button = up -> F (phase = halt_up & dstate = closed & lstate = locked))
+    G (G button = up -> F (phase = halt_up & lstate = locked))
+
+
 
 LTLSPEC
     G (phase in {moving_up, halt_up} -> button = up)
@@ -221,6 +224,12 @@ LTLSPEC
 
 LTLSPEC
     /--
-    Sempre que uma ação é ininterruptível, o estado do botão não se alterará. 
+    A sequência PD2 -> CompletePD2 é ininterruptível.
     --/
-    G (!interruptible -> button = next(button))
+    G (PRE_OPEN_UP & lstate = locked & phase = moving_down -> button = next(button))
+
+LTLSPEC
+    /--
+    A sequência PU2 -> CompletePU2 é ininterruptível.
+    --/
+    G (PRE_OPEN_DN & lstate = locked & phase = moving_up -> button = next(button))

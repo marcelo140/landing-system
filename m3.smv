@@ -1,21 +1,15 @@
 MODULE main
 
-DEFINE
-    BUTTON_CHANGES := button != next(button);
-    SWAP_READY := ready_for = retracting ? extending : retracting;
-    SWAP_GEARS := gstate = extended ? retracted : extended;
+/--
+Na terceira fase é adicionado o pormenor das engrenagens. Agora, quando as portas são
+abertas, as engrenagens transitam gradualmente até que se encontrem totalmente extendidas
+ou retraídas, dependendo do estado em que se encontravam gradualmente. Esta transição não
+pode ser interrompida pelo piloto.
 
-    PRE_OPEN_UP := phase = moving_up & ready_for = retracting;
-    POS_OPEN_UP := phase = moving_up & ready_for = extending;
-    PRE_OPEN_DN := phase = moving_down & ready_for = extending;
-    POS_OPEN_DN := phase = moving_down & ready_for = retracting;
-
-    PRE_OPEN := PRE_OPEN_UP | PRE_OPEN_DN;
-    POS_OPEN := POS_OPEN_UP | POS_OPEN_DN;
-
-    -- Fases em que é possível começar o ciclo de retracção/extensão das engrenagens.
-    RETRACTION_INIT := PRE_OPEN_UP & dstate = closed & lstate = unlocked;
-    EXTENSION_INIT :=  PRE_OPEN_DN & dstate = closed & lstate = unlocked;
+Segundo a figura 4 do enunciado, quando o piloto interrompe o sistema após as engrenagens
+terem sido completamente extendidas (retraídas), estas passam imediatamente a retraídas
+(extendidas) sem passar pelos estados intermédios.
+--/
 
 VAR
     button: {down, up};
@@ -23,17 +17,45 @@ VAR
 
     dstate: {open, closed};
     lstate: {locked, unlocked};
-    ready_for: {extending, retracting};
     interruptible: boolean;
-    -- Variável sobre o estado das engrenagens.
-    gstate: {extended, extending, retracted, retracting, none};
+
+    /--
+    A variável 'gstate', que no M2 era apenas uma variável auxiliar, é agora uma variável
+    que descreve um dos componentes a ser modelados: as engrenagens. Dado o aumento de
+    complexidade no movimento das engrenagens, foi necessário acrescentar novos estados.
+    --/
+    gstate: {extended, extending, retracted, retracting};
+    
+DEFINE
+    BUTTON_CHANGES := button != next(button);
+    SWAP_GEARS := gstate = extended ? retracted : extended;
+
+    /--
+    Dado o aumento de complexidade nos estados em que a porta está aberta foi necessário
+    especificar mais detalhe quando é esta ainda não se encontra aberta.
+    --/
+    PRE_OPEN_UP := dstate = closed & phase = moving_up & gstate = extended;
+    POS_OPEN_UP := dstate = closed & phase = moving_up & gstate = retracted;   
+    PRE_OPEN_DN := dstate = closed & phase = moving_down & gstate = retracted;
+    POS_OPEN_DN := dstate = closed & phase = moving_down & gstate = extended;
+
+    PRE_OPEN := PRE_OPEN_UP | PRE_OPEN_DN;
+    POS_OPEN := POS_OPEN_UP | POS_OPEN_DN;
+
+    /--
+    Estas três novas cláusulas descrevem o momento em que as engrenagens terminam a sua
+    extensão/retração.
+    --/
+    GEARS_MOVED_DN := phase = moving_down & gstate = extended;
+    GEARS_MOVED_UP := phase = moving_up & gstate = retracted;
+    GEARS_MOVED := GEARS_MOVED_DN | GEARS_MOVED_UP;
 
 ASSIGN
+    -- Declarações iniciais de acordo com a figura 4 do enunciado.
     init(button) := down;
     init(phase) := halt_down;
     init(dstate) := closed;
     init(lstate) := locked;
-    init(ready_for) := retracting;
     init(interruptible) := TRUE;
     init(gstate) := extended;
 
@@ -46,45 +68,47 @@ ASSIGN
                         TRUE: phase;
                    esac;
 
-    next(dstate) := case !BUTTON_CHANGES & dstate = open & interruptible = TRUE: closed;
-                         -- Portas abrem quando entra no ciclo de extensão/retracção
-                         !BUTTON_CHANGES & (RETRACTION_INIT | EXTENSION_INIT): open;
+    /--
+    Anteriormente a porta era fechada sempre que estivesse aberta. Nesta terceira fase
+    é necessário esperar que as engrenagens se extendam/retraiam.
+    --/
+    next(dstate) := case !BUTTON_CHANGES & PRE_OPEN & lstate = unlocked: open;
+                         !BUTTON_CHANGES & dstate = open & GEARS_MOVED: closed;
 
                          TRUE: dstate;
                     esac;
 
     next(lstate) := case !BUTTON_CHANGES & lstate = locked & PRE_OPEN: unlocked;
-                         !BUTTON_CHANGES & lstate = unlocked & dstate = closed & POS_OPEN: locked;
+                         !BUTTON_CHANGES & dstate = closed & POS_OPEN: locked;
 
                          TRUE: lstate;
                     esac;
 
-    next(interruptible) := case BUTTON_CHANGES & dstate = closed & lstate = locked & phase in {moving_up, moving_down}: FALSE;
-                                dstate = closed & lstate = locked & interruptible = FALSE: TRUE;
+    /--
+    Nesta fase foram adicionados novos estados que não podem ser interrompidos. Estes
+    devem-se ao facto que, quando o processo de extensão/retração é iniciado, este não
+    pode ser interrompido.
+    --/
+    next(interruptible) := case BUTTON_CHANGES & lstate = locked & phase in {moving_up, moving_down}: FALSE;
+                                dstate = closed & next(dstate) = open: FALSE;
+                                next(gstate) in {retracting, extending}: FALSE;
 
-                                -- Quando inicia a retracção/extensão das engrenagens
-                                !BUTTON_CHANGES & (RETRACTION_INIT | EXTENSION_INIT): FALSE;
-                                -- Quando acaba a retracção/extensão das engrenagens
-                                gstate in {retracting, extending}: TRUE;
-
-                                TRUE: interruptible;
+                                TRUE: TRUE;
                            esac;
 
-    next(ready_for) := case BUTTON_CHANGES & dstate = open: SWAP_READY;
-                            -- Quando entra no estado opening_DN ou opening_UP
-                            !BUTTON_CHANGES & RETRACTION_INIT: extending;
-                            !BUTTON_CHANGES & EXTENSION_INIT: retracting;
-            
-                            TRUE: ready_for;
-                        esac;
+    /--
+    Quando as portas se encontra abertas, o sistema de retração/extensão inicia-se,
+    fazendo com que as engrenagens se comecem a mover. Quando estas se estão a mover,
+    no próximo ficam completamente retraídas/extendidas.
 
-    next(gstate) := case -- Extensão/Retracção das engrenagens
-                         gstate = retracted & phase = moving_down & ready_for = retracting: extending;
+    Quando o processo de mover as engrenagens termina, caso o piloto altere o estado do
+    botão, as engrenagens passam de extendidas (retraídas) a retraídas (extendidas) sem
+    passar novamente pelos estados de transição.
+    --/
+    next(gstate) := case dstate = open & phase = moving_down & gstate = retracted: extending;
+                         dstate = open & phase = moving_up & gstate = extended: retracting;
                          gstate = extending: extended;
-                         -- Finalização do ciclo
-                         gstate = extended & phase = moving_up & ready_for = extending: retracting;
                          gstate = retracting: retracted;
-                         -- Se o botão mudar, as engrenagens também mudam
                          BUTTON_CHANGES & dstate = open: SWAP_GEARS;
 
                          TRUE: gstate;
@@ -93,50 +117,89 @@ ASSIGN
 TRANS
     !interruptible -> next(button) = button;
 
-LTLSPEC
-    G (G button = down -> F (phase = halt_down & dstate = closed & lstate = locked))
+/--
+Aqui verificamos que o modelo construído, para além de verificar as condições impostas
+por M2, verifica também algumas novas condições que consideramos necessárias para
+comprovar a validade do modelo. Verificamos também que os requisitos R21 e R22 são
+cumpridos.
+
+Dois dos requisitos impostos por M2 relativos ao momento em que a porta se encontra
+aberta foram retirados por não fazerem sentido nesta terceira fase.
+--/
 
 LTLSPEC
-    G (G button = up -> F (phase = halt_up & dstate = closed & lstate = locked))
+    G (G button = down -> F (phase = halt_down & lstate = locked))
 
 LTLSPEC
-    -- R21: Se o botão estiver para baixo então a fase de retracção não se verifica.
+    G (G button = up -> F (phase = halt_up & lstate = locked))
+
+LTLSPEC
+    /--
+    R21: Se o botão estiver para baixo então a sequência de retração não se verifica.
+    --/
     G (G button = down -> gstate != retracting)
 
 LTLSPEC
-    -- R22: Se o botão estiver para cima então a fase de extensão não se verifica.
+    /--
+    R22: Se o botão estiver para cima então a sequência de extensão não se verifica.
+    --/
     G (G button = up -> gstate != extending)
 
 
-LTLSPEC
-    G (button = down -> phase != moving_up & phase != halt_up)
 
 LTLSPEC
-    G (button = up -> phase != moving_down & phase != halt_down)
+    G (phase in {moving_up, halt_up} -> button = up)
 
 LTLSPEC
-    G (phase = moving_up -> button = up)
-
-LTLSPEC
-    G (phase = moving_down -> button = down)
+    G (phase in {moving_down, halt_down} -> button = down)
 
 LTLSPEC
     G (dstate = open -> lstate = unlocked)
+
 LTLSPEC
     G (lstate = locked -> dstate = closed)
 
 LTLSPEC
-    -- M3_inv2
-    G (dstate = closed & gstate != retracted -> gstate = extended)
+    G (phase = halt_down -> gstate = extended)
 
 LTLSPEC
-    -- M3_inv3
-    G (dstate = closed & gstate != extended -> gstate = retracted)
+    G (phase = halt_up -> gstate = retracted)
 
 LTLSPEC
-    -- M3_inv4
-    G (!(gstate in {retracted, extended}) -> dstate = open)
+    G (PRE_OPEN_UP & lstate = locked & phase = moving_down -> !BUTTON_CHANGES)
 
 LTLSPEC
-    -- M3_inv5
-    G (dstate = closed -> !(gstate in {extending, retracting}))
+    G (PRE_OPEN_DN & lstate = locked & phase = moving_up -> !BUTTON_CHANGES)
+
+LTLSPEC
+    /--
+    A sequência opening_up -> retracting_gears é ininterruptível.
+    --/
+    G (dstate = open & gstate = extended & phase = moving_up -> !BUTTON_CHANGES) 
+
+LTLSPEC
+    /--
+    A sequência opening_up -> extending_gears é ininterruptível.
+    --/
+    G (dstate = open & gstate = retracted & phase = moving_down -> !BUTTON_CHANGES) 
+
+LTLSPEC
+    /--
+    As sequências retracting_gears -> retraction e extending_gears -> extension são
+    ininterruptíveis.
+    --/
+    G (gstate in {retracting, extending} -> !BUTTON_CHANGES)
+
+LTLSPEC
+    /--
+    Se o sistema está a realizar a sequência de retração/extensão, a porta encontra-se
+    aberta.
+    --/
+    G (gstate in {retracting, extending} -> dstate = open)
+
+LTLSPEC
+    /--
+    Se o sistema não está a realizar a sequência de retração/extensão, as engrenagens
+    ou estão completamente retraídas ou estão completamente extendidas.
+    --/
+    G (dstate = closed -> gstate in {retracted, extended})

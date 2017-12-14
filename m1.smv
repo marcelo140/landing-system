@@ -64,6 +64,8 @@ LTLSPEC
     --/
     G (G button = up -> F phase = halt_up)
 
+
+
 LTLSPEC
     /--
     Para todos os estados em que o sistema se encontra na fase de retração, o botão 
